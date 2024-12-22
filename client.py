@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from psycopg2 import connect, sql
 from psycopg2.errors import UndefinedTable
-from datetime import datetime
 from tkcalendar import DateEntry
 from datetime import datetime
 
@@ -36,7 +35,6 @@ def login():
 def open_client_window(email):
     client_window = tk.Tk()
     client_window.title(f"Client - {email}")
-    client_window.geometry("800x600")
 
     # Функция: показать текущую скидку клиента
     def show_discount():
@@ -84,6 +82,15 @@ def open_client_window(email):
             button.config(state=tk.NORMAL)
         else:
             button.config(state=tk.DISABLED)
+
+    # Функция: проверка ввода для поиска
+    def check_search_input(entry, button1, button2):
+        if entry.get().strip():
+            button1.config(state=tk.NORMAL)
+            button2.config(state=tk.NORMAL)
+        else:
+            button1.config(state=tk.DISABLED)
+            button2.config(state=tk.DISABLED)
 
     # Функция: загрузить список доступных game_id
     def load_game_ids():
@@ -227,12 +234,11 @@ def open_client_window(email):
         search_history_button = ttk.Button(search_history_frame, text="Search by Game ID", command=search_history)
         search_history_button.pack(side=tk.LEFT, padx=5)
         search_history_button.config(state=tk.DISABLED)
-        search_history_entry.bind("<KeyRelease>", lambda event: check_search_input(search_history_entry, search_history_button))
 
         delete_by_game_button = ttk.Button(search_history_frame, text="Delete by Game ID", command=delete_orders_by_game)
         delete_by_game_button.pack(side=tk.LEFT, padx=5)
         delete_by_game_button.config(state=tk.DISABLED)
-        delete_by_game_button.bind("<KeyRelease>", lambda event: check_search_input(search_history_entry, delete_by_game_button))
+        search_history_entry.bind("<KeyRelease>", lambda event: check_search_input(search_history_entry, delete_by_game_button, search_history_button))
 
         history_table = ttk.Treeview(
             order_history_window,
