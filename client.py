@@ -3,6 +3,8 @@ from tkinter import ttk, messagebox
 from psycopg2 import connect, sql
 from psycopg2.errors import UndefinedTable
 from datetime import datetime
+from tkcalendar import DateEntry
+from datetime import datetime
 
 # Функция для подключения к базе данных
 def connect_to_db(user, password):
@@ -36,6 +38,20 @@ def open_client_window(email):
     client_window.title(f"Client - {email}")
     client_window.geometry("800x600")
 
+    # Функция: показать текущую скидку клиента
+    def show_discount():
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT current_discount FROM discounts WHERE client_id = (SELECT client_id FROM clients WHERE email = %s);", (email,))
+            discount = cur.fetchone()
+            if discount:
+                messagebox.showinfo("Your Discount", f"Your current discount is: {discount[0]}%")
+            else:
+                messagebox.showinfo("Your Discount", "You do not have a discount yet.")
+            cur.close()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to fetch discount: {e}")
+
     # Функция: показать все игры
     def display_games():
         try:
@@ -62,11 +78,38 @@ def open_client_window(email):
         except Exception as e:
             messagebox.showerror("Error", f"Search failed: {e}")
 
+    # Функция: проверка ввода для поиска
+    def check_search_input(entry, button):
+        if entry.get().strip():
+            button.config(state=tk.NORMAL)
+        else:
+            button.config(state=tk.DISABLED)
+
+    # Функция: загрузить список доступных game_id
+    def load_game_ids():
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT game_id FROM games;")
+            game_ids = [row[0] for row in cur.fetchall()]
+            cur.close()
+            return game_ids
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load game IDs: {e}")
+            return []
+
     # Функция: оформление заказа
     def make_order():
-        game_id = game_id_entry.get()
-        start_date = start_date_entry.get()
-        end_date = end_date_entry.get()
+        game_id = game_id_combobox.get()
+        start_date_raw = start_date_picker.get()
+        end_date_raw = end_date_picker.get()
+
+        # Преобразуем дату в формат YYYY-MM-DD
+        try:
+            start_date = datetime.strptime(start_date_raw, "%m/%d/%y").strftime("%Y-%m-%d")
+            end_date = datetime.strptime(end_date_raw, "%m/%d/%y").strftime("%Y-%m-%d")
+        except ValueError as e:
+            messagebox.showerror("Error", f"Invalid date format: {e}")
+            return
         try:
             cur = conn.cursor()
             cur.execute(
@@ -125,6 +168,19 @@ def open_client_window(email):
             except Exception as e:
                 messagebox.showerror("Error", f"Search failed: {e}")
 
+        # Загружаем доступные Rental ID в Combobox
+        def load_rental_ids():
+            try:
+                cur = conn.cursor()
+                table_name = f"rental_history_{email}"
+                cur.execute(sql.SQL("SELECT rental_id FROM {}").format(sql.Identifier(table_name)))
+                rental_ids = [row[0] for row in cur.fetchall()]
+                cur.close()
+                return rental_ids
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load rental IDs: {e}")
+                return []
+
         # Функция: удалить заказы по game_id
         def delete_orders_by_game():
             game_id = search_history_entry.get()
@@ -144,7 +200,7 @@ def open_client_window(email):
 
         # Функция: удалить заказ по ID заказа
         def delete_order_by_id():
-            order_id = order_id_entry.get()
+            order_id = rental_id_combobox.get()
             try:
                 cur = conn.cursor()
                 table_name = f"rental_history_{email}"
@@ -161,14 +217,22 @@ def open_client_window(email):
 
         # Виджеты окна истории заказов
         ttk.Label(order_history_window, text="Order History").pack()
+
         search_history_frame = tk.Frame(order_history_window)
         search_history_frame.pack()
+
         search_history_entry = ttk.Entry(search_history_frame)
         search_history_entry.pack(side=tk.LEFT, padx=5)
+
         search_history_button = ttk.Button(search_history_frame, text="Search by Game ID", command=search_history)
         search_history_button.pack(side=tk.LEFT, padx=5)
+        search_history_button.config(state=tk.DISABLED)
+        search_history_entry.bind("<KeyRelease>", lambda event: check_search_input(search_history_entry, search_history_button))
+
         delete_by_game_button = ttk.Button(search_history_frame, text="Delete by Game ID", command=delete_orders_by_game)
         delete_by_game_button.pack(side=tk.LEFT, padx=5)
+        delete_by_game_button.config(state=tk.DISABLED)
+        delete_by_game_button.bind("<KeyRelease>", lambda event: check_search_input(search_history_entry, delete_by_game_button))
 
         history_table = ttk.Treeview(
             order_history_window,
@@ -181,22 +245,32 @@ def open_client_window(email):
 
         delete_frame = tk.Frame(order_history_window)
         delete_frame.pack(pady=5)
-        ttk.Label(delete_frame, text="Enter Rental ID to delete:").pack(side=tk.LEFT)
-        order_id_entry = ttk.Entry(delete_frame)
-        order_id_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Label(delete_frame, text="Rental ID to delete:").pack(side=tk.LEFT)
+        rental_id_combobox = ttk.Combobox(delete_frame, values=load_rental_ids())
+        rental_id_combobox.pack(side=tk.LEFT, padx=5)
         ttk.Button(delete_frame, text="Delete by Rental ID", command=delete_order_by_id).pack(side=tk.LEFT, padx=5)
 
-        # Кнопка для загрузки всей истории
         ttk.Button(order_history_window, text="Display History", command=display_history).pack(pady=10)
 
     # Виджеты главного окна
+
+    ttk.Button(client_window, text="Show My Discount", command=show_discount).pack(pady=10)
+
     ttk.Label(client_window, text="Games").pack()
+
     search_frame = tk.Frame(client_window)
     search_frame.pack()
+
     search_entry = ttk.Entry(search_frame)
     search_entry.pack(side=tk.LEFT, padx=5)
-    search_button = ttk.Button(search_frame, text="Search by Genre", command=search_games)
+
+    search_button = ttk.Button(search_frame, text="Search by Genre", command=lambda: search_games())
     search_button.pack(side=tk.LEFT, padx=5)
+    search_button.config(state=tk.DISABLED)
+
+    # Отслеживание ввода в поле поиска
+    search_entry.bind("<KeyRelease>", lambda event: check_search_input(search_entry, search_button))
+
     game_table = ttk.Treeview(client_window, columns=("ID", "Name", "Genre", "Description", "Price"), show="headings")
     for col in ("ID", "Name", "Genre", "Description", "Price"):
         game_table.heading(col, text=col)
@@ -204,15 +278,19 @@ def open_client_window(email):
 
     order_frame = tk.Frame(client_window)
     order_frame.pack(pady=10)
+
     ttk.Label(order_frame, text="Game ID:").grid(row=0, column=0, padx=5, pady=5)
-    game_id_entry = ttk.Entry(order_frame)
-    game_id_entry.grid(row=0, column=1, padx=5, pady=5)
-    ttk.Label(order_frame, text="Start Date (YYYY-MM-DD):").grid(row=1, column=0, padx=5, pady=5)
-    start_date_entry = ttk.Entry(order_frame)
-    start_date_entry.grid(row=1, column=1, padx=5, pady=5)
-    ttk.Label(order_frame, text="End Date (YYYY-MM-DD):").grid(row=2, column=0, padx=5, pady=5)
-    end_date_entry = ttk.Entry(order_frame)
-    end_date_entry.grid(row=2, column=1, padx=5, pady=5)
+    game_id_combobox = ttk.Combobox(order_frame, values=load_game_ids())
+    game_id_combobox.grid(row=0, column=1, padx=5, pady=5)
+
+    ttk.Label(order_frame, text="Start Date:").grid(row=1, column=0, padx=5, pady=5)
+    start_date_picker = DateEntry(order_frame, width=12, background='darkblue', foreground='white', borderwidth=2)
+    start_date_picker.grid(row=1, column=1, padx=5, pady=5)
+
+    ttk.Label(order_frame, text="End Date:").grid(row=2, column=0, padx=5, pady=5)
+    end_date_picker = DateEntry(order_frame, width=12, background='darkblue', foreground='white', borderwidth=2)
+    end_date_picker.grid(row=2, column=1, padx=5, pady=5)
+
     ttk.Button(order_frame, text="Make Order", command=make_order).grid(row=3, columnspan=2, pady=10)
 
     ttk.Button(client_window, text="Load Games", command=display_games).pack(pady=10)
