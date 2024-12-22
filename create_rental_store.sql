@@ -23,7 +23,7 @@ CREATE TABLE Rentals (
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     discount NUMERIC(5, 2), -- рассчитывается триггером
-    total_price NUMERIC(10, 2),
+    total_price NUMERIC(10, 2), -- рассчитывается триггером
     CHECK (end_date > start_date)
 );
 
@@ -83,13 +83,75 @@ CREATE TRIGGER trg_update_discount
 AFTER INSERT ON Rentals
 FOR EACH ROW EXECUTE FUNCTION update_discount();
 
+CREATE OR REPLACE FUNCTION insert_discount_for_new_client()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Вставка строки в таблицу Discounts для нового клиента
+    INSERT INTO Discounts (client_id, total_rentals, total_spent, current_discount)
+    VALUES (NEW.client_id, 0, 0, 0);  -- Изначально total_rentals = 0, total_spent = 0, current_discount = 0
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_insert_discount_after_client
+AFTER INSERT ON Clients
+FOR EACH ROW
+EXECUTE FUNCTION insert_discount_for_new_client();
+
 CREATE OR REPLACE FUNCTION delete_client_user(client_email TEXT)
 RETURNS VOID AS $$
 BEGIN
+    -- Удаление прав пользователя на последовательности
+    EXECUTE format('REVOKE ALL PRIVILEGES ON SEQUENCE clients_client_id_seq FROM %I;', client_email);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON SEQUENCE games_game_id_seq FROM %I;', client_email);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON SEQUENCE rentals_rental_id_seq FROM %I;', client_email);
+
+    -- Удаление прав пользователя на таблицы
+    EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE clients FROM %I;', client_email);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE games FROM %I;', client_email);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE rentals FROM %I;', client_email);
+    EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE discounts FROM %I;', client_email);
+
     -- Удаление пользователя базы данных
-    EXECUTE format('DROP USER IF EXISTS %I', client_email);
+    EXECUTE format('DROP USER IF EXISTS %I;', client_email);
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION delete_client_user(client_email TEXT)
+RETURNS VOID AS $$
+DECLARE
+    obj RECORD;
+BEGIN
+    -- Удаление прав пользователя на все таблицы, исключая некоторые
+    FOR obj IN 
+        SELECT c.relname
+        FROM pg_catalog.pg_class c
+        JOIN pg_catalog.pg_roles r ON r.rolname = client_email
+        WHERE c.relkind = 'r'  -- только таблицы
+        AND c.relname != 'sql_features'  -- исключаем таблицу sql_features
+        AND c.relname != 'sql_implementation_info'
+        AND c.relname != 'sql_sizing'
+        AND has_table_privilege(r.rolname, c.oid, 'SELECT') -- проверка прав на таблицы
+    LOOP
+        EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE %I FROM %I;', obj.relname, client_email);
+    END LOOP;
+
+    -- Удаление прав пользователя на все последовательности
+    FOR obj IN 
+        SELECT s.relname
+        FROM pg_catalog.pg_class s
+        JOIN pg_catalog.pg_roles r ON r.rolname = client_email
+        WHERE s.relkind = 'S'  -- только последовательности
+        AND has_sequence_privilege(r.rolname, s.oid, 'USAGE') -- проверка прав на последовательности
+    LOOP
+        EXECUTE format('REVOKE ALL PRIVILEGES ON SEQUENCE %I FROM %I;', obj.relname, client_email);
+    END LOOP;
+
+    -- Удаление пользователя базы данных
+    EXECUTE format('DROP USER IF EXISTS %I;', client_email);
+END;
+$$ LANGUAGE plpgsql;
+
 
 CREATE OR REPLACE FUNCTION on_delete_client()
 RETURNS TRIGGER AS $$ 
@@ -106,3 +168,5 @@ EXECUTE FUNCTION on_delete_client();
 
 -- Создание индекса по текстовому полю "title" в таблице Games
 CREATE INDEX idx_game_title ON Games(title);
+
+GRANT USAGE, CREATE ON SCHEMA public TO PUBLIC
