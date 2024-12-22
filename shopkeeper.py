@@ -3,105 +3,6 @@ from tkinter import messagebox
 from tkinter import ttk
 from psycopg2 import connect
 
-'''import psycopg2
-import os
-
-#-------------------------проверка / создание бд---------------------------#
-
-# Параметры подключения к PostgreSQL
-host = 'localhost'
-user = 'postgres'  # Укажите имя пользователя
-password = 'udLABA'  # Укажите пароль
-port = '5432'
-
-# Путь к SQL скриптам
-sql_files = [
-    'create_rental_store.sql',
-    'procedures.sql',
-    'create_users.sql',
-]
-
-def database_exists(cursor, dbname):
-    cursor.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = %s", (dbname,))
-    return cursor.fetchone() is not None
-
-import re
-
-def execute_sql_scripts(cursor, scripts):
-    for script_path in scripts:
-        try:
-            with open(script_path, 'r', encoding='utf-8') as file:
-                sql_content = file.read()
-                
-                # Регулярное выражение для разделения по ключевому слову CREATE,
-                # сохраняя ключевое слово в начале нового блока.
-                statements = re.split(r'(?<=;)\s*(?=CREATE)', sql_content, flags=re.IGNORECASE)
-                
-                for statement in statements:
-                    statement = statement.strip()
-                    if statement:  # Пропускаем пустые строки
-                        cursor.execute(statement)
-                        print(f"Executed statement:\n{statement[:50]}...")  # Вывод первых 50 символов
-        except Exception as e:
-            print(f"Error executing script {script_path}: {e}")
-
-def execute_sql_scripts(cursor, scripts):
-    for script_path in scripts:
-        try:
-            with open(script_path, 'r', encoding='utf-8') as file:
-                sql_content = file.read()
-                cursor.execute(sql_content)
-        except UnicodeDecodeError as e:
-            print(f"Error reading file {script_path}: {e}")
-        except Exception as e:
-            print(f"Error executing script {script_path}: {e}")
-
-try:
-    # Подключаемся к PostgreSQL без указания базы данных
-    conn = psycopg2.connect(
-        dbname='postgres',
-        user=user,
-        password=password,
-        host=host,
-        port=port
-    )
-    conn.autocommit = True
-    cursor = conn.cursor()
-
-    # Проверяем, существует ли база данных
-    if database_exists(cursor, 'rental_store'):
-        print("Database 'rental_store' already exists.")
-    else:
-        print("Database 'rental_store' does not exist. Creating it now...")
-        cursor.execute("CREATE DATABASE rental_store")
-        print("Database 'rental_store' created.")
-
-        # Подключаемся к созданной базе данных
-        conn.close()
-        conn = psycopg2.connect(
-            dbname='rental_store',
-            user=user,
-            password=password,
-            host=host,
-            port=port
-        )
-        cursor = conn.cursor()
-        
-        # Выполняем SQL-скрипты
-        execute_sql_scripts(cursor, sql_files)
-        print("SQL scripts executed successfully.")
-
-except Exception as e:
-    print(f"An error occurred: {e}")
-
-finally:
-    if 'cursor' in locals():
-        cursor.close()
-    if 'conn' in locals():
-        conn.close()
-
-#----------------------------end-----------------------------#
-'''
 # Функция для получения списка таблиц из базы данных
 def get_table_names():
     try:
@@ -117,6 +18,7 @@ def get_table_names():
             FROM information_schema.tables 
             WHERE table_schema = 'public';
         """)
+        #AND table_name NOT LIKE 'rental_history_%';
         tables = cur.fetchall()
         cur.close()
         conn.close()

@@ -8,7 +8,7 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION delete_row(p_table_name TEXT, p_condition TEXT)
 RETURNS VOID AS $$
 BEGIN
-    EXECUTE format('DELETE FROM %I WHERE %s', p_table_name, p_condition);
+    EXECUTE format('DELETE FROM %I WHERE %s CASCADE', p_table_name, p_condition);
 END;
 $$ LANGUAGE plpgsql;
 
