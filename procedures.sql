@@ -29,8 +29,7 @@ BEGIN
 
     -- Предоставление минимальных привилегий новому пользователю
     EXECUTE format('GRANT CONNECT ON DATABASE rental_store TO %I', client_email);
-    EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %I', client_email);
-    EXECUTE format('GRANT INSERT ON rentals TO %I', client_email);
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %I', client_email);
     EXECUTE format('GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO %I', client_email);
     EXECUTE format('GRANT USAGE, CREATE ON SCHEMA public TO %I', client_email);
     
