@@ -139,3 +139,89 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trigger_delete_rental_history
 AFTER DELETE ON Clients
 FOR EACH ROW EXECUTE FUNCTION delete_rental_history_table();
+
+CREATE OR REPLACE FUNCTION get_all_games()
+RETURNS TABLE(game_id INT, title VARCHAR(200), genre VARCHAR(100), description TEXT, rental_price NUMERIC) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT games.game_id, games.title, games.genre, games.description, games.rental_price
+    FROM games;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION search_games_func(search_genre TEXT)
+RETURNS TABLE(game_id INT, title VARCHAR(200), genre VARCHAR(100), description TEXT, rental_price NUMERIC)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY  
+    SELECT games.game_id, games.title, games.genre, games.description, games.rental_price
+    FROM games
+    WHERE games.genre ILIKE '%' || search_genre || '%';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION load_game_ids()
+RETURNS TABLE(game_id INT)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT games.game_id
+    FROM games;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION make_order_func(client_email TEXT, game_id INT, start_date TEXT, end_date TEXT)
+RETURNS VOID LANGUAGE plpgsql AS $$
+DECLARE
+    start_date_converted DATE;
+    end_date_converted DATE;
+BEGIN
+    -- Преобразуем start_date и end_date в тип date
+    start_date_converted := TO_DATE(start_date, 'YYYY-MM-DD');
+    end_date_converted := TO_DATE(end_date, 'YYYY-MM-DD');
+    
+    -- Вставляем запись в таблицу rentals (discount и total_price будут рассчитываться триггером)
+    INSERT INTO rentals (client_id, game_id, start_date, end_date)
+    SELECT client_id, game_id, start_date_converted, end_date_converted
+    FROM clients
+    WHERE email = client_email;
+    
+EXCEPTION
+    WHEN others THEN
+        RAISE EXCEPTION 'Order failed: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION show_discount_func(client_email TEXT)
+RETURNS NUMERIC AS $$
+DECLARE
+    client_index INT;
+    discount NUMERIC;
+BEGIN
+    -- Извлекаем client_id из таблицы Clients по email
+    SELECT clients.client_id INTO client_index
+    FROM clients
+    WHERE email = client_email;
+
+    -- Если client_id не найден, возвращаем 0
+    IF client_index IS NULL THEN
+        RETURN 0;
+    END IF;
+
+    -- Извлекаем скидку из таблицы Discounts по client_id
+    SELECT current_discount INTO discount
+    FROM discounts
+    WHERE discounts.client_id = client_index;
+
+    -- Если скидка не найдена, возвращаем 0, иначе возвращаем найденное значение
+    IF discount IS NULL THEN
+        RETURN 0;
+    ELSE
+        RETURN discount;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+

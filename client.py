@@ -40,7 +40,7 @@ def open_client_window(email):
     def show_discount():
         try:
             cur = conn.cursor()
-            cur.execute("SELECT current_discount FROM discounts WHERE client_id = (SELECT client_id FROM clients WHERE email = %s);", (email,))
+            cur.execute("SELECT show_discount_func(%s);", (email,))
             discount = cur.fetchone()
             if discount:
                 messagebox.showinfo("Your Discount", f"Your current discount is: {discount[0]}%")
@@ -54,7 +54,7 @@ def open_client_window(email):
     def display_games():
         try:
             cur = conn.cursor()
-            cur.execute("SELECT * FROM games;")
+            cur.execute("SELECT * FROM get_all_games()")
             rows = cur.fetchall()
             update_table(game_table, rows)
             cur.close()
@@ -64,12 +64,12 @@ def open_client_window(email):
     # Функция: поиск игр по жанру
     def search_games():
         genre = search_entry.get()
+        genre=str(genre)
         try:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM games WHERE genre ILIKE %s;",
-                (f"%{genre}%",)
-            )
+            cur.execute("""
+        SELECT * FROM search_games_func(%s);
+        """, (genre,)) 
             rows = cur.fetchall()
             update_table(game_table, rows)
             cur.close()
@@ -77,7 +77,7 @@ def open_client_window(email):
             messagebox.showerror("Error", f"Search failed: {e}")
 
     # Функция: проверка ввода для поиска
-    def check_search_input(entry, button):
+    def check_search_input1(entry, button):
         if entry.get().strip():
             button.config(state=tk.NORMAL)
         else:
@@ -92,11 +92,11 @@ def open_client_window(email):
             button1.config(state=tk.DISABLED)
             button2.config(state=tk.DISABLED)
 
-    # Функция: загрузить список доступных game_id
+# Функция: загрузить список доступных game_id
     def load_game_ids():
         try:
             cur = conn.cursor()
-            cur.execute("SELECT game_id FROM games;")
+            cur.execute("SELECT load_game_ids();")
             game_ids = [row[0] for row in cur.fetchall()]
             cur.close()
             return game_ids
@@ -104,7 +104,7 @@ def open_client_window(email):
             messagebox.showerror("Error", f"Failed to load game IDs: {e}")
             return []
 
-    # Функция: оформление заказа
+# Функция: оформление заказа done
     def make_order():
         game_id = game_id_combobox.get()
         start_date_raw = start_date_picker.get()
@@ -120,12 +120,11 @@ def open_client_window(email):
         try:
             cur = conn.cursor()
             cur.execute(
-                """
-                INSERT INTO rentals (client_id, game_id, start_date, end_date)
-                SELECT client_id, %s, %s, %s FROM clients WHERE email = %s;
-                """,
-                (game_id, start_date, end_date, email)
-            )
+            """
+            SELECT make_order_func(%s, %s, %s, %s);
+            """,
+            (email, game_id, start_date, end_date)
+        )
             conn.commit()
             messagebox.showinfo("Success", "Order placed successfully!")
             cur.close()
@@ -275,7 +274,7 @@ def open_client_window(email):
     search_button.config(state=tk.DISABLED)
 
     # Отслеживание ввода в поле поиска
-    search_entry.bind("<KeyRelease>", lambda event: check_search_input(search_entry, search_button))
+    search_entry.bind("<KeyRelease>", lambda event: check_search_input1(search_entry, search_button))
 
     game_table = ttk.Treeview(client_window, columns=("ID", "Name", "Genre", "Description", "Price"), show="headings")
     for col in ("ID", "Name", "Genre", "Description", "Price"):

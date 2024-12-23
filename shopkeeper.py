@@ -16,9 +16,9 @@ def get_table_names():
         cur.execute("""
             SELECT table_name 
             FROM information_schema.tables 
-            WHERE table_schema = 'public';
+            WHERE table_schema = 'public' AND table_name NOT LIKE 'rental_history_%';
         """)
-        #AND table_name NOT LIKE 'rental_history_%';
+        
         tables = cur.fetchall()
         cur.close()
         conn.close()
@@ -60,9 +60,21 @@ def display_table_data(table_name):
             host="localhost"
         )
         cur = conn.cursor()
-        cur.execute(f"SELECT * FROM {table_name};")
+
+        # Вызов SQL-функции вместо прямого SQL-запроса
+        cur.execute("SELECT row_data FROM get_table_data(%s)", (table_name,))
         rows = cur.fetchall()
-        columns = [desc[0] for desc in cur.description]  # Получение названий столбцов
+
+        # Если данные есть, разбираем JSON
+        if rows:
+            # Преобразуем JSON в словари
+            parsed_rows = [row[0] for row in rows]
+            # Получаем названия столбцов из ключей первого JSON-объекта
+            columns = list(parsed_rows[0].keys())
+        else:
+            parsed_rows = []
+            columns = []
+
         cur.close()
         conn.close()
 
@@ -74,11 +86,14 @@ def display_table_data(table_name):
         treeview["columns"] = columns
         treeview["show"] = "headings"
 
-        # Добавление новых данных
+       # Настройка заголовков столбцов
         for column in columns:
-            treeview.heading(column, text=column)  # Заголовки столбцов
-        for row in rows:
-            treeview.insert("", "end", values=row)  # Добавление данных
+            treeview.heading(column, text=column)  # Заголовок столбца
+            treeview.column(column, anchor="w", stretch=True)  # Настройка ширины
+
+        # Добавление новых данных
+        for row in parsed_rows:
+            treeview.insert("", "end", values=[row[col] for col in columns])
 
     except Exception as e:
         messagebox.showerror("Error", f"Error displaying table data: {e}")
@@ -258,13 +273,13 @@ def update_column_combobox(event=None):
     columns = get_column_names(table_name)
     column_combobox['values'] = columns
 
-# Заполнение комбобокса с таблицами при старте программы
+# Заполнение комбобокса с таблицами при старте + я устал :((
 table_combobox['values'] = get_table_names()
 
-# Привязка обновления столбцов при изменении таблицы
-table_combobox.bind("<<ComboboxSelected>>", update_column_combobox)
+# обновлениe столбцов при изменении таблицы
+table_combobox.bind("<<ComboboxSelected>>", update_column_combobox) 
 
-# Создание кнопки для отображения данных таблицы
+# кнопки для отображения данных таблицы
 def display_table():
     table_name = table_combobox.get()
     if table_name:
@@ -277,7 +292,7 @@ btn_display.grid(row=2, column=0, columnspan=2)
 treeview = ttk.Treeview(root)
 treeview.grid(row=3, column=0, columnspan=4)
 
-# Элементы для обновления записи
+# обновлениe записи
 tk.Label(root, text="New Value").grid(row=7, column=0)
 entry_new_value = tk.Entry(root)
 entry_new_value.grid(row=7, column=1)
@@ -289,7 +304,7 @@ entry_condition.grid(row=8, column=1)
 btn_update = tk.Button(root, text="Update Row", command=update_row_in_db)
 btn_update.grid(row=9, column=0, columnspan=2)
 
-# Элементы для удаления записи
+# удалениe записи
 btn_delete = tk.Button(root, text="Delete Row", command=delete_row_from_db)
 btn_delete.grid(row=10, column=0, columnspan=2)
 
